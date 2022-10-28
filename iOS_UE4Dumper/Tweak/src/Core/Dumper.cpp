@@ -6,7 +6,6 @@
 using json = nlohmann::json;
 
 #include "wrappers.hpp"
-#include "UEPackage.hpp"
 
 #include <KittyMemory/KittyMemory.hpp>
 #include <KittyMemory/KittyScanner.hpp>
@@ -57,7 +56,7 @@ namespace Dumper
 		if (Profile::BaseAddress == 0)
 			return UE_DS_ERROR_EXE_NOT_FOUND;
 
-		getsegmentdata(gameProfile->GetExecutableInfo().header, "__PAGEZERO", &JsonGen::__pagezero_size);
+		GetSegmentData(gameProfile->GetExecutableInfo().header, "__PAGEZERO", &JsonGen::__pagezero_size);
 
 		Offsets *p_offsets = gameProfile->GetOffsets();
 		if (!p_offsets)
@@ -69,15 +68,15 @@ namespace Dumper
 
 		if (Profile::isUsingFNamePool)
 		{
-			Profile::FNamePoolPtr = gameProfile->GetFNamePoolDataPtr();
-			if (Profile::FNamePoolPtr == 0)
-				return UE_DS_ERROR_INIT_GNAMES;
+			Profile::NamePoolDataPtr = gameProfile->GetNamesPtr();
+			if (Profile::NamePoolDataPtr == 0)
+				return UE_DS_ERROR_INIT_NAMEPOOL;
 		}
 		else
 		{
-			Profile::GNamesPtr = gameProfile->GetGNamesPtr();
+			Profile::GNamesPtr = gameProfile->GetNamesPtr();
 			if (Profile::GNamesPtr == 0)
-				return UE_DS_ERROR_INIT_NAMEPOOL;
+				return UE_DS_ERROR_INIT_GNAMES;
 		}
 
 		uintptr_t GUObjectsArrayPtr = gameProfile->GetGUObjectArrayPtr();
@@ -125,7 +124,7 @@ namespace Dumper
 		}
 		else
 		{
-			fmt::print(logfile, "FNamePool: {:#08x}\n", Profile::FNamePoolPtr);
+			fmt::print(logfile, "FNamePool: {:#08x}\n", Profile::NamePoolDataPtr);
 		}
 		fmt::print(logfile, "Test Dumping First 10 Name Enteries\n");
 		for (int i = 0; i < 10; i++)
@@ -184,16 +183,6 @@ namespace Dumper
 			return UE_DS_ERROR_EMPTY_PACKAGES;
 		}
 
-		FILE *fulldump_file = nullptr;
-		if (args->dump_full)
-		{
-			std::string fulldump_path = args->dump_dir;
-			fulldump_path += "/FullDump.hpp";
-			fulldump_file = fopen(fulldump_path.c_str(), "w");
-			if (!fulldump_file)
-				return UE_DS_ERROR_IO_OPERATION;
-		}
-
 		int packages_saved = 0;
 		std::string packages_unsaved{};
 
@@ -207,7 +196,7 @@ namespace Dumper
 		for (UE_UPackage package : packages)
 		{
 			package.Process();
-			if (package.Save(fulldump_file, args->dump_headers ? args->dump_headers_dir.c_str() : NULL))
+			if (package.Save(args->dump_full ? args->dump_dir.c_str() : nullptr, args->dump_headers ? args->dump_headers_dir.c_str() : nullptr))
 			{
 				packages_saved++;
 				classes_saved += package.Classes.size();
@@ -264,9 +253,6 @@ namespace Dumper
 
 			fmt::print(jsfile, "{}", js.dump(4));
 		}
-
-		if (fulldump_file)
-			fclose(fulldump_file);
 
 		return UE_DS_SUCCESS;
 	}
